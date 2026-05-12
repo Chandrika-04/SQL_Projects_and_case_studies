@@ -111,21 +111,6 @@ USE retailpulse;
 
 **Approach:** Used `CHECK (rating BETWEEN 1 AND 5)` for range validation and a composite `UNIQUE (customer_id, product_id)` constraint to prevent duplicate reviews.
 
-```sql
-CREATE TABLE product_reviews (
-    review_id         INT          PRIMARY KEY AUTO_INCREMENT,
-    customer_id       INT          NOT NULL,
-    product_id        INT          NOT NULL,
-    rating            INT          NOT NULL,
-    review_text       TEXT,
-    review_date       DATE         NOT NULL,
-    verified_purchase TINYINT(1)   DEFAULT 0,
-    FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
-    FOREIGN KEY (product_id)  REFERENCES products(product_id),
-    CONSTRAINT chk_rating      CHECK (rating BETWEEN 1 AND 5),
-    CONSTRAINT uq_cust_product UNIQUE (customer_id, product_id)
-);
-```
 
 ---
 
@@ -137,19 +122,6 @@ CREATE TABLE product_reviews (
 3. Increase `phone` from `VARCHAR(15)` to `VARCHAR(20)`
 4. Replace NULL `supplier` values with `'Unknown Supplier'`, then enforce `NOT NULL`
 5. Drop `coupon_code` from `orders`
-
-**Approach:** Each change uses a targeted `ALTER TABLE` statement. For the `NOT NULL` constraint, an `UPDATE` must run first to eliminate existing NULLs — otherwise the constraint addition fails.
-
-```sql
-ALTER TABLE customers ADD COLUMN gstn_number VARCHAR(20) NULL;
-ALTER TABLE customers RENAME COLUMN loyalty_tier TO membership_tier;
-ALTER TABLE customers MODIFY COLUMN phone VARCHAR(20);
-
-UPDATE products SET supplier = 'Unknown Supplier' WHERE supplier IS NULL;
-ALTER TABLE products MODIFY COLUMN supplier VARCHAR(100) NOT NULL;
-
-ALTER TABLE orders DROP COLUMN coupon_code;
-```
 
 ---
 
@@ -175,19 +147,14 @@ ALTER TABLE orders DROP COLUMN coupon_code;
 #### Task 2.1 — Aggregate Functions and Ordering
 
 **Q1:** Total revenue per category (excluding cancelled orders), ordered highest to lowest.  
-**Approach:** `SUM(quantity * unit_price * (1 - discount_pct/100))` joined across `order_items → products → categories`, filtered with `WHERE status <> 'Cancelled'`.
 
 **Q2:** Average order value per channel (Online vs In-Store) for Delivered orders only.  
-**Approach:** Revenue divided by `COUNT(DISTINCT order_id)` grouped by `channel`.
 
 **Q3:** Customers with more than 2 delivered orders — name, city, count.  
-**Approach:** `HAVING COUNT(order_id) > 2` on a join between `customers` and `orders`.
 
 **Q4:** Top 3 products by total units sold across non-cancelled orders.  
-**Approach:** `SUM(quantity)` grouped by product, filtered by status, `ORDER BY ... LIMIT 3`.
 
 **Q5:** Count of customers who used a coupon + orders with vs without coupon in one query.  
-**Approach:** Conditional aggregation using `SUM(CASE WHEN coupon_code IS NOT NULL THEN 1 ELSE 0 END)`.
 
 ---
 
