@@ -164,14 +164,6 @@ ALTER TABLE orders DROP COLUMN coupon_code;
 
 **Approach:** Targeted `UPDATE` and `DELETE` statements using primary key filters to avoid accidental bulk changes.
 
-```sql
-UPDATE customers  SET email     = 'nikhil@mail.com' WHERE customer_id = 11;
-UPDATE orders     SET status    = 'Shipped'          WHERE order_id    = 1009;
-UPDATE products   SET stock_qty = stock_qty + 300    WHERE product_id  = 108;
-UPDATE order_items SET quantity = 5                  WHERE item_id     = 2;
-DELETE FROM returns WHERE reason = 'Changed mind';
-```
-
 ---
 
 ### 🔍 Phase 2 — The Query Engine
@@ -202,154 +194,55 @@ DELETE FROM returns WHERE reason = 'Changed mind';
 #### Task 2.2 — The HAVING Clause
 
 **Q1:** Categories where average listed unit price > ₹10,000.
-```sql
-SELECT c.category_name, ROUND(AVG(p.unit_price), 2) AS avg_unit_price
-FROM products p
-JOIN categories c ON p.category_id = c.category_id
-GROUP BY c.category_id, c.category_name
-HAVING AVG(p.unit_price) > 10000;
-```
 
 **Q2:** Suppliers who supply more than one product.
-```sql
-SELECT supplier, COUNT(product_id) AS product_count
-FROM products
-GROUP BY supplier
-HAVING COUNT(product_id) > 1;
-```
 
 **Q3:** Months in 2023 where total Delivered orders exceeded 2, displayed as `YYYY-MM`.
-```sql
-SELECT DATE_FORMAT(order_date, '%Y-%m') AS month_label, COUNT(*) AS total_delivered_orders
-FROM orders
-WHERE status = 'Delivered' AND YEAR(order_date) = 2023
-GROUP BY DATE_FORMAT(order_date, '%Y-%m')
-HAVING COUNT(*) > 2;
-```
 
-**Q4:** Customers whose total refund amount exceeds ₹50,000.
-```sql
-SELECT c.full_name, SUM(r.refund_amount) AS total_refund
-FROM customers c
-JOIN orders  o ON c.customer_id = o.customer_id
-JOIN returns r ON o.order_id   = r.order_id
-GROUP BY c.customer_id, c.full_name
-HAVING SUM(r.refund_amount) > 50000;
-```
+**Q4:** Customers whose total refund amount exceeds ₹50,000
 
 ---
 
 #### Task 2.3 — String Functions
 
 **Q1:** Extract first name and last name from `full_name` into separate columns.
-```sql
-SELECT
-    full_name,
-    SUBSTRING_INDEX(full_name, ' ', 1)            AS first_name,
-    SUBSTRING(full_name, LOCATE(' ', full_name)+1) AS last_name
-FROM customers;
-```
 
 **Q2:** Build a display label formatted as `ARYAN M. | Gold | Mumbai`.
-```sql
-SELECT
-    CONCAT(
-        UPPER(SUBSTRING_INDEX(full_name,' ',1)), ' ',
-        UPPER(SUBSTRING(full_name, LOCATE(' ',full_name)+1, 1)), '. | ',
-        membership_tier, ' | ', city
-    ) AS display_label
-FROM customers;
-```
 
 **Q3:** Extract email domain (part after `@`) for customers with an email.
-```sql
-SELECT customer_id, SUBSTRING_INDEX(email, '@', -1) AS email_domain
-FROM customers WHERE email IS NOT NULL;
-```
 
 **Q4:** Products whose name exceeds 20 characters, ordered by length descending.
-```sql
-SELECT product_name, CHAR_LENGTH(product_name) AS name_length
-FROM products
-WHERE CHAR_LENGTH(product_name) > 20
-ORDER BY CHAR_LENGTH(product_name) DESC;
-```
 
 **Q5:** Display all city values in proper Title Case (SELECT only, not UPDATE).
-```sql
-SELECT CONCAT(UPPER(LEFT(city,1)), LOWER(SUBSTRING(city,2))) AS city_title_case
-FROM customers;
-```
 
 ---
 
 #### Task 2.4 — Date and Time Functions
 
 **Q1:** Days each customer has been registered as of today.
-```sql
-SELECT full_name, DATEDIFF(CURDATE(), registered_on) AS days_registered
-FROM customers;
-```
 
 **Q2:** Full month name for each Delivered order using `MONTHNAME()`.
 
 **Q3:** All orders placed in Q1 2023 (January–March).
-```sql
-SELECT * FROM orders
-WHERE order_date BETWEEN '2023-01-01' AND '2023-03-31';
-```
 
 **Q4:** Days gap between order date and return date — flagged as `'Late Return'` (>15 days) or `'Within Window'`.
-```sql
-SELECT r.order_id, r.product_id, o.order_date, r.return_date,
-       DATEDIFF(r.return_date, o.order_date) AS days_gap,
-       CASE WHEN DATEDIFF(r.return_date, o.order_date) > 15
-            THEN 'Late Return' ELSE 'Within Window' END AS return_status
-FROM returns r JOIN orders o ON r.order_id = o.order_id;
-```
 
 **Q5:** Most recent order, earliest order, and the difference in days — in one query.
-```sql
-SELECT MAX(order_date) AS most_recent, MIN(order_date) AS earliest,
-       DATEDIFF(MAX(order_date), MIN(order_date)) AS date_span_days
-FROM orders;
-```
 
 ---
 
 #### Task 2.5 — Regular Expressions
 
 **Q1:** Customers with potentially invalid/missing-domain emails.
-```sql
-SELECT customer_id, full_name, email FROM customers
-WHERE email IS NOT NULL
-  AND email NOT REGEXP '^[^@]+@[^@]+\\.[^@]+$';
-```
 
 **Q2:** Products whose name does not start with an uppercase A–Z letter.
-```sql
-SELECT product_id, product_name FROM products
-WHERE product_name NOT REGEXP '^[A-Z]';
-```
 
 **Q3:** Customers with invalid Indian mobile numbers (must start with 6–9, 10 digits total).
-```sql
-SELECT customer_id, full_name, phone FROM customers
-WHERE phone NOT REGEXP '^[6-9][0-9]{9}$';
-```
 
 **Q4:** Remove digits from product names using `REGEXP_REPLACE` — original vs cleaned side by side.
-```sql
-SELECT product_name, REGEXP_REPLACE(product_name, '[0-9]', '') AS cleaned_name
-FROM products;
-```
 
 **Q5:** Extract the 4-digit year from `added_on` using `REGEXP_SUBSTR`.
-```sql
-SELECT product_name, added_on,
-       REGEXP_SUBSTR(CAST(added_on AS CHAR), '20[0-9]{2}') AS extracted_year
-FROM products;
-```
+
 
 ---
 
@@ -368,18 +261,6 @@ FROM products;
 
 **Q3:** Full category hierarchy using a **Recursive CTE**.  
 **Approach:** Anchor selects top-level categories (`parent_id IS NULL`), recursive member joins children to parents until no more levels remain.
-
-```sql
-WITH RECURSIVE category_hierarchy AS (
-    SELECT category_id, category_name, parent_id, 'Top Level' AS parent_category_name
-    FROM categories WHERE parent_id IS NULL
-    UNION ALL
-    SELECT c.category_id, c.category_name, c.parent_id, ch.category_name
-    FROM categories c
-    JOIN category_hierarchy ch ON c.parent_id = ch.category_id
-)
-SELECT category_id, category_name, parent_category_name FROM category_hierarchy;
-```
 
 **Q4:** Each customer's most recent order using a **correlated subquery** referencing the outer `customer_id`.
 
